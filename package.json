@@ -2,9 +2,16 @@
   "name": "cursor-feedback",
   "displayName": "Cursor Feedback",
   "description": "Automatically run a command, such as `npm start`, and feed any errors to the Cursor chat window.",
-  "version": "0.0.1",
+  "version": "1.0.0",
+  "author": "Nada Amin (with ChatGPT 4o)",
+  "license": "MIT",
+  "publisher": "namin",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/namin/cursor-feedback"
+  },
   "engines": {
-    "vscode": "^1.94.0"
+    "vscode": "^1.93.0"
   },
   "categories": [
     "Other"
@@ -12,10 +19,31 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Cursor Feedback Configuration",
+      "properties": {
+        "cursor-feedback.runCommand": {
+          "type": "string",
+          "default": "npm start",
+          "description": "Command to run when files are changed"
+        },
+        "cursor-feedback.captureFeedbackFrom": {
+          "type": "string",
+          "enum": [
+            "stdout",
+            "stderr",
+            "both"
+          ],
+          "default": "stderr",
+          "description": "Capture feedback from stdout, stderr, or both"
+        }
+      }
+    },
     "commands": [
       {
-        "command": "cursor-feedback.helloWorld",
-        "title": "Hello World"
+        "command": "cursorFeedback.triggerFeedback",
+        "title": "Trigger Cursor Feedback Manually"
       }
     ]
   },
@@ -28,14 +56,14 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.94.0",
     "@types/mocha": "^10.0.8",
     "@types/node": "20.x",
+    "@types/vscode": "^1.93.0",
     "@typescript-eslint/eslint-plugin": "^8.7.0",
     "@typescript-eslint/parser": "^8.7.0",
-    "eslint": "^9.11.1",
-    "typescript": "^5.6.2",
     "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.11.1",
+    "typescript": "^5.6.2"
   }
 }
