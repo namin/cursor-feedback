@@ -2,7 +2,7 @@
   "name": "cursor-feedback",
   "displayName": "Cursor Feedback",
   "description": "Automatically run a command, such as `npm start`, and feed any errors to the Cursor chat window.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Nada Amin (with ChatGPT 4o)",
   "license": "MIT",
   "publisher": "namin",
@@ -23,6 +23,11 @@
       "type": "object",
       "title": "Cursor Feedback Configuration",
       "properties": {
+        "cursor-feedback.cursorCommand": {
+          "type": "string",
+          "default": "composer.startComposerPrompt",
+          "description": "The cursor registered command to run. The default is equivalent to Cmd-I."
+        },
         "cursor-feedback.runCommand": {
           "type": "string",
           "default": "npm start",

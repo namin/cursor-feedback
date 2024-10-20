@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { exec } from 'child_process';
+import { exec, ChildProcess } from 'child_process';
 
 // Define an enum for feedback capture options to enforce strict typing
 enum FeedbackSource {
@@ -8,73 +8,102 @@ enum FeedbackSource {
     Both = "both"
 }
 
-// Function to send error to Cursor chat window using osascript (macOS)
-function sendToCursorChat(errorMessage: string) {
-    const safeMessage = errorMessage.replace(/'/g, "\\'").replace(/\n/g, ' '); // Escape single quotes and remove newlines
-    
-    // Trigger Cmd-K to open the Cursor chat window
-    exec(`osascript -e 'tell application "System Events" to keystroke "k" using {command down}'`, (error) => {
-        if (error) {
-            vscode.window.showErrorMessage("Error triggering Cmd-K: " + error.message);
-        } else {
-            // Send the error message after a short delay to ensure the chat window is open
-            setTimeout(() => {
-                exec(`osascript -e 'tell application "System Events" to keystroke "${safeMessage}"'`, (err) => {
-                    if (err) {
-                        vscode.window.showErrorMessage("Error sending message: " + err.message);
-                    } else {
-                        exec(`osascript -e 'tell application "System Events" to keystroke return'`);
-                    }
-                });
-            }, 500);  // Adjust delay if necessary
-        }
-    });
+// Function to trigger the Composer prompt instead of using osascript
+function sendToCursorChat(cursorCommand: string, errorMessage: string) {
+    vscode.commands.executeCommand(cursorCommand)
+        .then(() => {
+            const safeMessage = errorMessage.replace(/'/g, "\\'").replace(/\n/g, ' '); // Escape single quotes and remove newlines
+            vscode.env.clipboard.writeText(safeMessage).then(() => {
+                vscode.window.showInformationMessage('Message copied to clipboard. Paste it.');
+            });
+        }, (error) => {
+        });
 }
 
-function runCommandAndSendFeedback(commandToRun: string, captureFeedbackFrom: string) {
-	vscode.window.showInformationMessage(`Running ${commandToRun}...`);
+let runningProcess: ChildProcess | null = null;  // Keep track of the running process
 
-	// Run the user-specified command
-	const process = exec(commandToRun, { cwd: vscode.workspace.rootPath });
+function runCommandAndSendFeedback(cursorCommand: string, commandToRun: string, captureFeedbackFrom: string) {
+    vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Running ${commandToRun}...`,
+        cancellable: true
+    }, (progress, token) => {
+        return new Promise<void>((resolve, reject) => {
+            // Start progress reporting
+            progress.report({ increment: 0, message: 'Initializing...' });
 
-	// Capture feedback from stdout or stderr based on user's configuration
-	if (captureFeedbackFrom === FeedbackSource.Stdout || captureFeedbackFrom === FeedbackSource.Both) {
-		process.stdout?.on('data', (data) => {
-			vscode.window.showInformationMessage(`Output: ${data}`);
-		});
-	}
+            // Kill any previous process if it's still running
+            if (runningProcess) {
+                runningProcess.kill();
+            }
 
-	if (captureFeedbackFrom === FeedbackSource.Stderr || captureFeedbackFrom === FeedbackSource.Both) {
-		process.stderr?.on('data', (data) => {
-			vscode.window.showErrorMessage(`Error: ${data}`);
-			sendToCursorChat(data.toString());  // Send error to Cursor chat
-		});
-	}
+            // Start the new process and store the reference
+            runningProcess = exec(commandToRun, { cwd: vscode.workspace.rootPath });
 
-	// Handle process termination
-	process.on('close', (code) => {
-		if (code !== 0) {
-			vscode.window.showErrorMessage(`${commandToRun} exited with code ${code}`);
-			sendToCursorChat(`Process terminated unexpectedly with exit code ${code}`);
-		} else {
-			vscode.window.showInformationMessage(`${commandToRun} completed successfully.`);
-		}
-	});
+            // Handle cancellation request from the user (no reporting of cancellation)
+            token.onCancellationRequested(() => {
+                if (runningProcess) {
+                    runningProcess.kill();  // Terminate the process if the user cancels
+                }
+                reject(new Error("Process canceled by user"));
+            });
+
+            // Capture feedback from stdout or stderr based on the user's configuration
+            if (captureFeedbackFrom === FeedbackSource.Stdout || captureFeedbackFrom === FeedbackSource.Both) {
+                runningProcess.stdout?.on('data', (data) => {
+                    vscode.window.showInformationMessage(`Output: ${data}`);
+                    sendToCursorChat(cursorCommand, `Output: ${data.toString()}`);
+                    progress.report({ increment: 50, message: 'Processing...' });
+                });
+            }
+
+            if (captureFeedbackFrom === FeedbackSource.Stderr || captureFeedbackFrom === FeedbackSource.Both) {
+                runningProcess.stderr?.on('data', (data) => {
+                    vscode.window.showErrorMessage(`Error: ${data}`);
+                    sendToCursorChat(cursorCommand, `Error: ${data.toString()}`);
+                    progress.report({ increment: 70, message: 'Error encountered, check the terminal...' });
+                });
+            }
+
+            setTimeout(() => {
+                resolve();
+            }, 5000);
+
+            // Handle process termination
+            runningProcess.on('close', (code) => {
+                if (code !== 0) {
+                    progress.report({ increment: 100, message: `Process failed with code ${code}` });
+                    reject(new Error(`Process exited with code ${code}`));
+                } else {
+                    progress.report({ increment: 100, message: 'Process completed successfully!' });;
+                    resolve();
+                }
+            });
+        });
+    });
 }
 
 export function activate(context: vscode.ExtensionContext) {
     // Read the configuration settings from user's settings.json
     const config = vscode.workspace.getConfiguration('cursor-feedback');
-    const commandToRun = config.get('runCommand', 'npm start');  // Default to "npm start"
-    const captureFeedbackFrom = config.get<FeedbackSource>('captureFeedbackFrom', FeedbackSource.Stderr);  // Default to "stderr"
+    const commandToRun = config.get('runCommand', 'npm start');
+    const captureFeedbackFrom = config.get<FeedbackSource>('captureFeedbackFrom', FeedbackSource.Stderr);
+    const cursorCommand = config.get('cursorCommand', 'composer.startComposerPrompt');
 
     // Watch for file changes in the workspace for specific file types
     const watcher = vscode.workspace.createFileSystemWatcher('**/*.{js,ts,json}');
     
+    vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
+        if (document.languageId === 'javascript' || document.languageId === 'typescript' || document.fileName.endsWith('.json')) {
+            vscode.window.showInformationMessage(`File ${document.fileName} was saved.`);
+            runCommandAndSendFeedback(cursorCommand!, commandToRun!, captureFeedbackFrom!);
+        }
+    });
+
     // Trigger when files change
     watcher.onDidChange((uri) => {
         vscode.window.showInformationMessage(`File ${uri.fsPath} changed.`);
-		runCommandAndSendFeedback(commandToRun!, captureFeedbackFrom!);
+		runCommandAndSendFeedback(cursorCommand, commandToRun!, captureFeedbackFrom!);
     });
 
     // Handle created or deleted files (optional, you can remove if unnecessary)
@@ -89,7 +118,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(watcher);
 
 	let disposable = vscode.commands.registerCommand('cursorFeedback.triggerFeedback', () => {
-        runCommandAndSendFeedback(commandToRun!, captureFeedbackFrom!);
+        runCommandAndSendFeedback(cursorCommand, commandToRun!, captureFeedbackFrom!);
     });
 
     context.subscriptions.push(disposable);
