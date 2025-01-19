@@ -46,6 +46,10 @@ No known issues at the moment.
 
 ## Release Notes
 
+### 1.0.2
+
+Update the defaults, and expand settings to support broader feedback. Tested on Dafny support.
+
 ### 1.0.1
 
 The extension is no longer macOS-specific, and is safer, relying only on the VSCode Extension API.
