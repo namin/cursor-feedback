@@ -9,75 +9,98 @@ enum FeedbackSource {
 }
 
 // Function to trigger the Composer prompt instead of using osascript
-function sendToCursorChat(cursorCommand: string, errorMessage: string) {
-    vscode.commands.executeCommand(cursorCommand)
-        .then(() => {
-            const safeMessage = errorMessage.replace(/'/g, "\\'").replace(/\n/g, ' '); // Escape single quotes and remove newlines
-            vscode.env.clipboard.writeText(safeMessage).then(() => {
-                vscode.window.showInformationMessage('Message copied to clipboard. Paste it.');
-            });
-        }, (error) => {
-        });
+async function sendToCursorChat(cursorCommand: string, errorMessage: string) {
+    try {
+        // First copy the message to clipboard
+        await vscode.env.clipboard.writeText(errorMessage);
+        
+        // Then open the composer
+        await vscode.commands.executeCommand(cursorCommand);
+        
+        // Show instruction to user
+        vscode.window.showInformationMessage('Message copied to clipboard. Please paste it into the composer.');
+    } catch (error) {
+        vscode.window.showErrorMessage(`Failed to send to Cursor: ${error}`);
+    }
 }
 
 let runningProcess: ChildProcess | null = null;  // Keep track of the running process
 
 function runCommandAndSendFeedback(cursorCommand: string, commandToRun: string, captureFeedbackFrom: string) {
+    let accumulatedOutput = '';
+
     vscode.window.withProgress({
         location: vscode.ProgressLocation.Notification,
         title: `Running ${commandToRun}...`,
         cancellable: true
-    }, (progress, token) => {
-        return new Promise<void>((resolve, reject) => {
-            // Start progress reporting
-            progress.report({ increment: 0, message: 'Initializing...' });
+    }, async (progress, token) => {
+        // Start progress reporting
+        progress.report({ increment: 0, message: 'Initializing...' });
 
-            // Kill any previous process if it's still running
-            if (runningProcess) {
-                runningProcess.kill();
-            }
+        // Kill any previous process if it's still running
+        if (runningProcess) {
+            runningProcess.kill();
+        }
 
+        return new Promise<void>((resolve) => {  // Only use resolve, no reject
             // Start the new process and store the reference
             runningProcess = exec(commandToRun, { cwd: vscode.workspace.rootPath });
 
-            // Handle cancellation request from the user (no reporting of cancellation)
+            // Handle cancellation request
             token.onCancellationRequested(() => {
                 if (runningProcess) {
-                    runningProcess.kill();  // Terminate the process if the user cancels
+                    runningProcess.kill();
                 }
-                reject(new Error("Process canceled by user"));
+                resolve();  // Just resolve on cancel
             });
 
-            // Capture feedback from stdout or stderr based on the user's configuration
+            // Handle stdout
             if (captureFeedbackFrom === FeedbackSource.Stdout || captureFeedbackFrom === FeedbackSource.Both) {
                 runningProcess.stdout?.on('data', (data) => {
-                    vscode.window.showInformationMessage(`Output: ${data}`);
-                    sendToCursorChat(cursorCommand, `Output: ${data.toString()}`);
+                    const output = `Output: ${data.toString()}`;
+                    accumulatedOutput += output + '\n';
+                    console.log(output);
                     progress.report({ increment: 50, message: 'Processing...' });
                 });
             }
 
+            // Handle stderr
             if (captureFeedbackFrom === FeedbackSource.Stderr || captureFeedbackFrom === FeedbackSource.Both) {
                 runningProcess.stderr?.on('data', (data) => {
-                    vscode.window.showErrorMessage(`Error: ${data}`);
-                    sendToCursorChat(cursorCommand, `Error: ${data.toString()}`);
-                    progress.report({ increment: 70, message: 'Error encountered, check the terminal...' });
+                    const error = `Error: ${data.toString()}`;
+                    accumulatedOutput += error + '\n';
+                    console.error(error);
+                    progress.report({ increment: 70, message: 'Error encountered...' });
                 });
             }
 
-            setTimeout(() => {
-                resolve();
-            }, 5000);
-
-            // Handle process termination
-            runningProcess.on('close', (code) => {
-                if (code !== 0) {
-                    progress.report({ increment: 100, message: `Process failed with code ${code}` });
-                    reject(new Error(`Process exited with code ${code}`));
-                } else {
-                    progress.report({ increment: 100, message: 'Process completed successfully!' });;
+            // Handle process completion
+            runningProcess.on('close', async (code) => {
+                try {
+                    if (accumulatedOutput) {
+                        await sendToCursorChat(cursorCommand, accumulatedOutput);
+                    }
+                    
+                    progress.report({ 
+                        increment: 100, 
+                        message: code === 0 ? 'Process completed successfully!' : `Process failed with code ${code}`
+                    });
+                } catch (error: any) {  // Type the error as any since we're using its message property
+                    console.error('Error in process close handler:', error);
+                    progress.report({ 
+                        increment: 100, 
+                        message: `Error handling output: ${error?.message || 'Unknown error'}`
+                    });
+                } finally {
                     resolve();
                 }
+            });
+
+            // Handle process errors
+            runningProcess.on('error', (error) => {
+                console.error('Process error:', error);
+                progress.report({ increment: 100, message: `Process error: ${error.message}` });
+                resolve();
             });
         });
     });

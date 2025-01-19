@@ -4,7 +4,7 @@ Use the Cursor Feedback VSCode extension to automatically run a command, such as
 
 ## Features
 
-The command to run and the captured ports are configurable through setting variables `cursor-feedback.runCommand` (anything; defaults to `npm start`) and `cursor-feedback.captureFeedbackFrom` (one of `stdout`, `stderr`, `both`; default to `stderr`).
+The command to run and the captured ports are configurable through user setting variables `cursor-feedback.runCommand` (anything; defaults to `npm start`) and `cursor-feedback.captureFeedbackFrom` (one of `stdout`, `stderr`, `both`; default to `stderr`).
 
 The command is deemed successfully if it hangs, as would happen when starting a server.
 The server is kept running, but the started process will be killed as needed at the next invocation of the feedback routine.
@@ -25,6 +25,14 @@ This extension contributes the following settings:
 * `cursor-feedback.runCommand`: The command-line command to run, defaults to `npm start`.
 * `cursor-feedback.captureFeedbackFrom`: The port(s) to capture feedback from, defaults to `stderr`.
 * `cursor-feedback.cursorCommand`: The IDE command to run on error, defaults to `composer.startComposerPrompt`.
+
+You can add these in the `settings.json` file, which you can find by running `Cmd-Shift-P` and typing `Preferences: Open Settings (JSON)`.
+To recap the default settings:
+```
+    "cursor-feedback.runCommand": "npm start",
+    "cursor-feedback.captureFeedbackFrom": "stderr",
+    "cursor-feedback.cursorCommand": "composer.startComposerPrompt"
+```
 
 ## Known Issues
 
