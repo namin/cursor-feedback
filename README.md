@@ -13,6 +13,8 @@ The IDE command to trigger is also configurable. By default, it is set to the `c
 The IDE command is only triggered if an error is detected.
 Due to programmability limitations, the error message is copied to the clipboard, and the user is left to manually paste it in the IDE.
 
+Automatic triggering happens when a file of a watched language or extension is saved. Manual triggering can be done with `Cmd-Shift-P` and typing `Trigger Cursor Feedback Manually`. 
+
 ## Requirements
 
 This extension is expected to run in Cursor, but if the IDE command to trigger is changed, it could run in VSCode as well.
@@ -25,6 +27,8 @@ This extension contributes the following settings:
 * `cursor-feedback.runCommand`: The command-line command to run, defaults to `npm start`.
 * `cursor-feedback.captureFeedbackFrom`: The port(s) to capture feedback from, defaults to `stderr`.
 * `cursor-feedback.cursorCommand`: The IDE command to run on error, defaults to `composer.startComposerPrompt`.
+* `cursor-feedback.watchLanguages`: The languages to watch for, defaults to `["javascript", "typescript"]`.
+* `cursor-feedback.watchExtensions`: The file extensions to watch for, defaults to `[".js", ".ts", ".json"]`.
 
 You can add these in the `settings.json` file, which you can find by running `Cmd-Shift-P` and typing `Preferences: Open Settings (JSON)`.
 To recap the default settings:
@@ -32,6 +36,8 @@ To recap the default settings:
     "cursor-feedback.runCommand": "npm start",
     "cursor-feedback.captureFeedbackFrom": "stderr",
     "cursor-feedback.cursorCommand": "composer.startComposerPrompt"
+    "cursor-feedback.watchLanguages": ["javascript", "typescript"],
+    "cursor-feedback.watchExtensions": [".js", ".ts", ".json"]
 ```
 
 ## Known Issues

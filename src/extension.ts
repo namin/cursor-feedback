@@ -112,12 +112,20 @@ export function activate(context: vscode.ExtensionContext) {
     const commandToRun = config.get('runCommand', 'npm start');
     const captureFeedbackFrom = config.get<FeedbackSource>('captureFeedbackFrom', FeedbackSource.Stderr);
     const cursorCommand = config.get('cursorCommand', 'composer.startComposerPrompt');
+    const watchLanguages = config.get<string[]>('watchLanguages', ['javascript', 'typescript']);
+    const watchExtensions = config.get<string[]>('watchExtensions', ['.js', '.ts', '.json']);
 
-    // Watch for file changes in the workspace for specific file types
-    const watcher = vscode.workspace.createFileSystemWatcher('**/*.{js,ts,json}');
+    // Create file watcher pattern from extensions
+    const watchPattern = `**/*${watchExtensions.join('|**/*')}`;  // This will create "**/*.dfy" for your case
+    const watcher = vscode.workspace.createFileSystemWatcher(watchPattern);
     
     vscode.workspace.onDidSaveTextDocument((document: vscode.TextDocument) => {
-        if (document.languageId === 'javascript' || document.languageId === 'typescript' || document.fileName.endsWith('.json')) {
+        // Add debug logging
+        console.log(`File saved: ${document.fileName}, Language ID: ${document.languageId}`);
+        
+        // Check if the file matches our watched languages or extensions
+        if (watchLanguages.includes(document.languageId) || 
+            watchExtensions.some(ext => document.fileName.endsWith(ext))) {
             vscode.window.showInformationMessage(`File ${document.fileName} was saved.`);
             runCommandAndSendFeedback(cursorCommand!, commandToRun!, captureFeedbackFrom!);
         }
@@ -125,8 +133,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Trigger when files change
     watcher.onDidChange((uri) => {
-        vscode.window.showInformationMessage(`File ${uri.fsPath} changed.`);
-		runCommandAndSendFeedback(cursorCommand, commandToRun!, captureFeedbackFrom!);
+        console.log(`File changed: ${uri.fsPath}`);
+        if (watchExtensions.some(ext => uri.fsPath.endsWith(ext))) {
+            vscode.window.showInformationMessage(`File ${uri.fsPath} changed.`);
+            runCommandAndSendFeedback(cursorCommand, commandToRun!, captureFeedbackFrom!);
+        }
     });
 
     // Handle created or deleted files (optional, you can remove if unnecessary)

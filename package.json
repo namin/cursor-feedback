@@ -2,8 +2,8 @@
   "name": "cursor-feedback",
   "displayName": "Cursor Feedback",
   "description": "Automatically run a command, such as `npm start`, and feed any errors to the Cursor chat window.",
-  "version": "1.0.1",
-  "author": "Nada Amin (with ChatGPT 4o)",
+  "version": "1.0.2",
+  "author": "Nada Amin (with ChatGPT 4o & Claude & Cursor...)",
   "license": "MIT",
   "publisher": "namin",
   "repository": {
@@ -42,6 +42,22 @@
           ],
           "default": "stderr",
           "description": "Capture feedback from stdout, stderr, or both"
+        },
+        "cursor-feedback.watchLanguages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": ["javascript", "typescript"],
+          "description": "Languages to watch for changes"
+        },
+        "cursor-feedback.watchExtensions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [".js", ".ts", ".json"],
+          "description": "File extensions to watch for changes"
         }
       }
     },
